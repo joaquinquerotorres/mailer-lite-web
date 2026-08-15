@@ -2,8 +2,8 @@
   <div class="campaigns-page">
     <div
       class="campaign-list"
-      :class="{ 'is-disabled': isViewOpen || isCreateOpen }"
-      :aria-hidden="isViewOpen || isCreateOpen"
+      :class="{ 'is-disabled': isViewOpen || isCreateOpen || isModifyOpen }"
+      :aria-hidden="isViewOpen || isCreateOpen || isModifyOpen"
     >
     <h2>Campaigns</h2>
 
@@ -27,6 +27,17 @@
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="btn"
+              aria-label="Modify"
+              title="Modify"
+              @click="modifyCampaign(campaign.id)"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
           </div>
@@ -66,26 +77,31 @@
     <CampaignCreate
       v-if="isCreateOpen"
       @close="isCreateOpen = false"
-      @create="fetchCampaigns"
+      @create="reloadCampaigns"
     />
-
-     <CampaignView
+    <CampaignView
       v-if="isViewOpen"
       :uuid="campaignUuid"
       @close="isViewOpen = false"
+    />
+    <CampaignModify
+      v-if="isModifyOpen"
+      :uuid="campaignUuid"
+      @close="isModifyOpen = false"
+      @modified="reloadCampaigns"
     />
   </div>
 </template>
 
 <script setup>
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import CampaignView from './CampaignView.vue'
+import CampaignCreate from './CampaignCreate.vue'
+import CampaignModify from './CampaignModify.vue'
 
 const API_URL = 'http://localhost:8000/api/campaigns'
 const LIMIT = 5
 const ARROW_DEBOUNCE_MS = 400
-
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import CampaignView from './CampaignView.vue'
-import CampaignCreate from './CampaignCreate.vue'
 
 const campaigns = ref([])
 const loading = ref(false)
@@ -95,6 +111,7 @@ const pageDebounceTimer = ref(null)
 const campaignUuid = ref(null)
 const isViewOpen = ref(false)
 const isCreateOpen = ref(false)
+const isModifyOpen = ref(false)
 
 const hasNext = computed(() => nextCursor.value !== null && nextCursor.value !== '')
 const hasPrev = computed(() => prevCursor.value !== null && prevCursor.value !== '')
@@ -112,24 +129,34 @@ const consultCampaign = (uuid) => {
   isViewOpen.value = true
 }
 
+const modifyCampaign = (uuid) => {
+  campaignUuid.value = uuid
+  isModifyOpen.value = true
+}
+
 const createCampaign = () => {
   isCreateOpen.value = true
+}
+
+const reloadCampaigns = () => {
+  fetchCampaigns()
 }
 
 const fetchCampaigns = async (cursor = null) => {
   loading.value = true
   try {
     const params = new URLSearchParams({ limit: String(LIMIT) })
-    if (cursor) {
+    if (typeof cursor === 'string' && cursor) {
       params.set('cursor', cursor)
     }
     const response = await fetch(`${API_URL}?${params.toString()}`)
     const data = await response.json()
-    campaigns.value = data.items
-    nextCursor.value = data.nextCursor
-    prevCursor.value = data.prevCursor
+    campaigns.value = Array.isArray(data.items) ? data.items : []
+    nextCursor.value = data.nextCursor ?? null
+    prevCursor.value = data.prevCursor ?? null
   } catch (error) {
     console.error('Error fetching campaigns:', error)
+    campaigns.value = []
   } finally {
     loading.value = false
   }

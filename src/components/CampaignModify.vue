@@ -1,8 +1,8 @@
 <template>
-  <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="create-campaign-title">
+  <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modify-campaign-title">
     <div class="modal">
       <div class="modal-header">
-        <h2 id="create-campaign-title">Create campaign</h2>
+        <h2 id="modify-campaign-title">Modify campaign</h2>
         <button type="button" class="close" aria-label="Close" @click="emit('close')">
           ×
         </button>
@@ -11,7 +11,11 @@
       <p v-if="successMessage" class="message success">{{ successMessage }}</p>
       <p v-if="formMessage" class="message error">{{ formMessage }}</p>
 
-      <form @submit.prevent="submit">
+      <div v-if="loading" class="loading">
+        Loading campaign...
+      </div>
+
+      <form v-else @submit.prevent="submit">
         <label>
           Name
           <input
@@ -57,13 +61,21 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, defineProps, defineEmits } from 'vue'
 import axios from 'axios'
 
 const API_URL = 'http://localhost:8000/api/campaigns'
 
-const emit = defineEmits(['create', 'close'])
+const emit = defineEmits(['modified', 'close'])
 
+const props = defineProps({
+  uuid: {
+    type: String,
+    required: true
+  }
+})
+
+const loading = ref(true)
 const name = ref('')
 const startDate = ref('')
 const endDate = ref('')
@@ -71,6 +83,31 @@ const submitting = ref(false)
 const successMessage = ref('')
 const formMessage = ref('')
 const errors = ref({})
+
+onMounted(() => {
+  fetchCampaign()
+})
+
+const fetchCampaign = async () => {
+  loading.value = true
+  formMessage.value = ''
+
+  try {
+    const response = await fetch(`${API_URL}/${props.uuid}`)
+    if (!response.ok) {
+      throw new Error('Could not load the campaign.')
+    }
+
+    const data = await response.json()
+    name.value = data.name || ''
+    startDate.value = data.startDate || ''
+    endDate.value = data.endDate || ''
+  } catch (error) {
+    formMessage.value = error.message || 'Could not load the campaign.'
+  } finally {
+    loading.value = false
+  }
+}
 
 const toDate = (calendarDate) => {
   if (calendarDate instanceof Date) {
@@ -105,10 +142,12 @@ const minEndDate = computed(() => {
   return addDays(minStartDate.value, 1)
 })
 
-watch(startDate, () => {
-  if (endDate.value && endDate.value < minEndDate.value) {
-    endDate.value = ''
+watch(startDate, (nextStart, prevStart) => {
+  if (!prevStart || !endDate.value || endDate.value >= minEndDate.value) {
+    return
   }
+
+  endDate.value = ''
 })
 
 const errorsFor = (field) => {
@@ -143,13 +182,6 @@ const validate = () => {
   return Object.keys(errors.value).length === 0
 }
 
-const resetForm = () => {
-  name.value = ''
-  startDate.value = ''
-  endDate.value = ''
-  errors.value = {}
-}
-
 const submit = async () => {
   successMessage.value = ''
   formMessage.value = ''
@@ -162,20 +194,19 @@ const submit = async () => {
   submitting.value = true
 
   try {
-    const response = await axios.post(API_URL, {
+    const response = await axios.put(`${API_URL}/${props.uuid}`, {
       name: name.value.trim(),
       startDate: startDate.value,
       endDate: endDate.value
     })
 
-    resetForm()
-    successMessage.value = response.data?.message || 'Campaign created successfully.'
-    emit('create')
+    successMessage.value = response.data?.message || 'Campaign updated successfully.'
+    emit('modified')
   } catch (error) {
     const data = error.response?.data || {}
     errors.value = data.errors && typeof data.errors === 'object' ? data.errors : {}
     formMessage.value = data.message
-      || (error.response ? 'The given data was invalid.' : 'Could not create the campaign. Please try again.')
+      || (error.response ? 'The given data was invalid.' : 'Could not update the campaign. Please try again.')
   } finally {
     submitting.value = false
   }
@@ -224,6 +255,11 @@ const submit = async () => {
   line-height: 1;
   cursor: pointer;
   color: #666;
+}
+
+.loading {
+  padding: 8px 0 16px;
+  font-size: 14px;
 }
 
 form {
