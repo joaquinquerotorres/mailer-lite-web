@@ -2,8 +2,8 @@
   <div class="campaigns-page">
     <div
       class="campaign-list"
-      :class="{ 'is-disabled': isViewOpen }"
-      :aria-hidden="isViewOpen"
+      :class="{ 'is-disabled': isViewOpen || isCreateOpen }"
+      :aria-hidden="isViewOpen || isCreateOpen"
     >
     <h2>Campaigns</h2>
 
@@ -53,8 +53,22 @@
           →
         </button>
       </div>
+      <button
+        type="button"
+        class="btn btn-create"
+        @click="createCampaign"
+      >
+        Create
+      </button>
     </template>
     </div>
+
+    <CampaignCreate
+      v-if="isCreateOpen"
+      @close="isCreateOpen = false"
+      @create="fetchCampaigns"
+    />
+
      <CampaignView
       v-if="isViewOpen"
       :uuid="campaignUuid"
@@ -71,19 +85,19 @@ const ARROW_DEBOUNCE_MS = 400
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import CampaignView from './CampaignView.vue'
+import CampaignCreate from './CampaignCreate.vue'
 
 const campaigns = ref([])
 const loading = ref(false)
-const hasPrev = ref(false)
-const hasNext = ref(false)
 const prevCursor = ref(null)
 const nextCursor = ref(null)
-const pageDebounceTimer =  ref(null)
+const pageDebounceTimer = ref(null)
 const campaignUuid = ref(null)
 const isViewOpen = ref(false)
+const isCreateOpen = ref(false)
 
-hasNext.value = computed(() => nextCursor.value !== null && nextCursor.value !== '')
-hasPrev.value = computed(() => prevCursor.value !== null && prevCursor.value !== '')
+const hasNext = computed(() => nextCursor.value !== null && nextCursor.value !== '')
+const hasPrev = computed(() => prevCursor.value !== null && prevCursor.value !== '')
 
 onMounted(() => {
   fetchCampaigns()
@@ -96,6 +110,10 @@ onUnmounted(() => {
 const consultCampaign = (uuid) => {
   campaignUuid.value = uuid
   isViewOpen.value = true
+}
+
+const createCampaign = () => {
+  isCreateOpen.value = true
 }
 
 const fetchCampaigns = async (cursor = null) => {
@@ -183,6 +201,14 @@ li {
 .btn svg {
   width: 18px;
   height: 18px;
+}
+
+.btn-create {
+  width: auto;
+  height: auto;
+  margin-top: 16px;
+  padding: 8px 16px;
+  font-size: 14px;
 }
 
 .pagination {
